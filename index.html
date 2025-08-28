@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Certificate Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 40px;
+            font-weight: 300;
+            letter-spacing: 1px;
+            color: #ffffff;
+        }
+
+        .loading-screen {
+            text-align: center;
+            padding: 60px 20px;
+            background: #2d2d2d;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #404040;
+            border-top: 4px solid #007acc;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        .names-list {
+            background: #2d2d2d;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .name-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            border-bottom: 1px solid #404040;
+            transition: background 0.2s ease;
+        }
+
+        .name-item:last-child {
+            border-bottom: none;
+        }
+
+        .name-item:hover {
+            background: #353535;
+        }
+
+        .name {
+            font-size: 16px;
+            font-weight: 400;
+        }
+
+        .download-btn {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            font-weight: 500;
+            min-width: 140px;
+        }
+
+        .download-btn:hover {
+            background: #0056b3;
+            transform: translateY(-1px);
+        }
+
+        .download-btn:disabled {
+            background: #555;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status {
+            text-align: center;
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .status.error {
+            background: #4a1a1a;
+            color: #ff6b6b;
+            border: 1px solid #ff6b6b33;
+        }
+
+        .status.success {
+            background: #1a4a1a;
+            color: #51cf66;
+            border: 1px solid #51cf6633;
+        }
+
+        .status.info {
+            background: #1a3a4a;
+            color: #74c0fc;
+            border: 1px solid #74c0fc33;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .btn-loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #ffffff33;
+            border-radius: 50%;
+            border-top-color: #ffffff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 8px;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #2d2d2d;
+            border-radius: 8px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 24px;
+            font-weight: 600;
+            color: #007acc;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #b0b0b0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 5px;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 50px;
+            padding: 20px;
+            color: #666;
+            font-size: 12px;
+            border-top: 1px solid #404040;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Certificate Generator</h1>
+        
+        <div id="loadingScreen" class="loading-screen">
+            <div class="loading-spinner"></div>
+            <p>Loading certificate data...</p>
+        </div>
+
+        <div id="stats" class="stats hidden">
+            <div class="stat-item">
+                <span id="totalCertificates" class="stat-number">0</span>
+                <span class="stat-label">Total Certificates</span>
+            </div>
+        </div>
+
+        <div id="status" class="status hidden"></div>
+        
+        <div id="namesList" class="names-list hidden"></div>
+        
+        <div class="footer">
+            © 2025 Microsoft Tech Community
+        </div>
+    </div>
+
+    <script>
+        class CertificateService {
+            constructor() {
+                this.names = [];
+                this.certificateImage = null;
+                this.customFont = null;
+                this.fontName = 'CustomFont';
+                
+                this.init();
+            }
+
+            async init() {
+                try {
+                    await this.loadAssets();
+                    this.renderInterface();
+                    this.hideLoadingScreen();
+                } catch (error) {
+                    this.showError('Failed to load certificate assets. Please check that utils folder contains list.txt, certificate.png, and font.ttf');
+                }
+            }
+
+            async loadAssets() {
+                // Load names list
+                const namesResponse = await fetch('utils/list.txt');
+                if (!namesResponse.ok) throw new Error('Could not load list.txt');
+                const namesText = await namesResponse.text();
+                this.names = namesText.split('\n')
+                    .map(name => name.trim())
+                    .filter(name => name.length > 0);
+
+                // Load certificate template
+                const certResponse = await fetch('utils/certificate.png');
+                if (!certResponse.ok) throw new Error('Could not load certificate.png');
+                const certBlob = await certResponse.blob();
+                this.certificateImage = await this.blobToDataURL(certBlob);
+
+                // Load custom font
+                try {
+                    const fontResponse = await fetch('utils/font.ttf');
+                    if (fontResponse.ok) {
+                        this.customFont = await fontResponse.arrayBuffer();
+                    }
+                } catch (fontError) {
+                    console.warn('Could not load custom font, will use default font');
+                }
+            }
+
+            blobToDataURL(blob) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            }
+
+            hideLoadingScreen() {
+                document.getElementById('loadingScreen').classList.add('hidden');
+                document.getElementById('stats').classList.remove('hidden');
+                document.getElementById('namesList').classList.remove('hidden');
+            }
+
+            showError(message) {
+                document.getElementById('loadingScreen').innerHTML = `
+                    <div style="color: #ff6b6b; font-size: 18px; margin-bottom: 10px;">⚠️ Error</div>
+                    <p style="color: #ff6b6b;">${message}</p>
+                `;
+            }
+
+            showStatus(message, type = 'info') {
+                const statusEl = document.getElementById('status');
+                statusEl.textContent = message;
+                statusEl.className = `status ${type}`;
+                statusEl.classList.remove('hidden');
+                
+                if (type === 'success') {
+                    setTimeout(() => this.hideStatus(), 3000);
+                }
+            }
+
+            hideStatus() {
+                document.getElementById('status').classList.add('hidden');
+            }
+
+            updateStats() {
+                document.getElementById('totalCertificates').textContent = this.names.length;
+            }
+
+            renderInterface() {
+                this.updateStats();
+                this.renderNamesList();
+            }
+
+            renderNamesList() {
+                const container = document.getElementById('namesList');
+                
+                if (this.names.length === 0) {
+                    container.innerHTML = '<div class="name-item"><span>No names found in list.txt</span></div>';
+                    return;
+                }
+
+                container.innerHTML = '';
+                
+                this.names.forEach((name, index) => {
+                    const nameItem = document.createElement('div');
+                    nameItem.className = 'name-item';
+                    
+                    nameItem.innerHTML = `
+                        <span class="name">${name}</span>
+                        <button class="download-btn" onclick="certificateService.downloadCertificate('${name.replace(/'/g, "\\'")}', ${index})">
+                            Download Certificate
+                        </button>
+                    `;
+                    
+                    container.appendChild(nameItem);
+                });
+            }
+
+            async downloadCertificate(name, index) {
+                const button = document.querySelectorAll('.download-btn')[index];
+                const originalText = button.textContent;
+                
+                try {
+                    button.innerHTML = '<div class="btn-loading"></div>Generating...';
+                    button.disabled = true;
+
+                    // Get the actual dimensions of the certificate image
+                    const img = new Image();
+                    img.src = this.certificateImage;
+                    
+                    await new Promise((resolve) => {
+                        img.onload = resolve;
+                    });
+
+                    const imgWidth = img.naturalWidth;
+                    const imgHeight = img.naturalHeight;
+                    
+                    // Determine orientation based on image dimensions
+                    const orientation = imgWidth > imgHeight ? 'landscape' : 'portrait';
+                    
+                    const { jsPDF } = window.jspdf;
+                    const pdf = new jsPDF({
+                        orientation: orientation,
+                        unit: 'px',
+                        format: [imgWidth, imgHeight]
+                    });
+
+                    // Add custom font if available
+                    if (this.customFont) {
+                        try {
+                            const fontBase64 = this.arrayBufferToBase64(this.customFont);
+                            pdf.addFileToVFS(`${this.fontName}.ttf`, fontBase64);
+                            pdf.addFont(`${this.fontName}.ttf`, this.fontName, 'normal');
+                        } catch (fontError) {
+                            console.warn('Could not load custom font, using default');
+                        }
+                    }
+
+                    // Add certificate background at its original size
+                    pdf.addImage(this.certificateImage, 'PNG', 0, 0, imgWidth, imgHeight);
+
+                    // Set font and color for name
+                    if (this.customFont) {
+                        pdf.setFont(this.fontName);
+                    } else {
+                        pdf.setFont('helvetica', 'bold');
+                    }
+                    
+                    // Scale font size based on image dimensions
+                    const baseFontSize = Math.min(imgWidth, imgHeight) * 0.06; // 6% of smaller dimension
+                    pdf.setFontSize(baseFontSize);
+                    pdf.setTextColor(0, 123, 204); // Blue color (#007BCC)
+
+                    // Center the name on the certificate
+                    const textWidth = pdf.getTextWidth(name);
+                    const x = (imgWidth - textWidth) / 2;
+                    const y = imgHeight * 0.4; // 58% down from the top
+
+                    pdf.text(name, x, y);
+
+                    // Download the PDF
+                    pdf.save(`certificate_${name.replace(/\s+/g, '_')}.pdf`);
+                    
+                    this.showStatus(`Certificate for ${name} downloaded successfully!`, 'success');
+
+                } catch (error) {
+                    console.error('Error generating certificate:', error);
+                    this.showStatus('Error generating certificate. Please try again.', 'error');
+                } finally {
+                    button.textContent = originalText;
+                    button.disabled = false;
+                }
+            }
+
+            arrayBufferToBase64(buffer) {
+                const binary = String.fromCharCode.apply(null, new Uint8Array(buffer));
+                return btoa(binary);
+            }
+        }
+
+        // Initialize the certificate service
+        const certificateService = new CertificateService();
+    </script>
+</body>
+</html>
